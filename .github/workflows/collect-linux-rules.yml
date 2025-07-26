@@ -1,0 +1,126 @@
+name: Collect Linux Security Rules
+
+on:
+  schedule:
+    - cron: '0 */8 * * *'  # Run every 8 hours
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  collect-rules:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Required for pushing changes
+    
+    steps:
+    - name: Checkout current repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Create linux directory
+      run: |
+        mkdir -p linux
+        rm -rf linux/*  # Clear existing files
+    
+    - name: Clone and collect Elastic Detection Rules (Linux)
+      run: |
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/elastic/detection-rules.git temp-elastic
+        cd temp-elastic
+        git sparse-checkout set rules/linux
+        cd ..
+        
+        # Copy Elastic Linux rules with prefix
+        find temp-elastic/rules/linux -type f \( -name "*.toml" -o -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | while read file; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            cp "$file" "linux/elastic-${filename}" 2>/dev/null || true
+          fi
+        done
+        
+        echo "Copied Elastic Linux rules"
+    
+    - name: Clone and collect SigmaHQ Rules (Linux)
+      run: |
+        git clone --depth 1 --filter=blob:none --sparse https://github.com/SigmaHQ/sigma.git temp-sigma
+        cd temp-sigma
+        git sparse-checkout set rules/linux
+        cd ..
+        
+        # Copy SigmaHQ Linux rules with prefix, handling subdirectories
+        find temp-sigma/rules/linux -type f \( -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | while read file; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            # Get subdirectory name for better organization
+            subdir=$(dirname "$file" | sed 's|temp-sigma/rules/linux/||' | sed 's|/|-|g')
+            if [ "$subdir" != "." ] && [ -n "$subdir" ]; then
+              cp "$file" "linux/sigma-${subdir}-${filename}" 2>/dev/null || true
+            else
+              cp "$file" "linux/sigma-${filename}" 2>/dev/null || true
+            fi
+          fi
+        done
+        
+        echo "Copied SigmaHQ Linux rules"
+    
+    - name: Create collection summary
+      run: |
+        # Count files by type
+        elastic_count=$(find linux -name "elastic-*" 2>/dev/null | wc -l)
+        sigma_count=$(find linux -name "sigma-*" 2>/dev/null | wc -l)
+        total_count=$(find linux -type f 2>/dev/null | wc -l)
+        
+        # Create README
+        cat > linux/README.md << EOF
+        # Linux Security Rules Collection
+        
+        This folder contains security detection rules for Linux systems collected from multiple sources, all in one directory.
+        
+        ## Sources & File Naming
+        - **elastic-\*.toml**: Rules from elastic/detection-rules (rules/linux)  
+        - **sigma-\*.yml**: Rules from SigmaHQ/sigma (rules/linux)
+          - **sigma-auditd-\*.yml**: Auditd-specific rules
+          - **sigma-builtin-\*.yml**: Builtin log rules
+          - **sigma-file_event-\*.yml**: File event rules
+          - **sigma-network_connection-\*.yml**: Network connection rules
+          - **sigma-process_creation-\*.yml**: Process creation rules
+        
+        ## Statistics
+        - Elastic Linux rules: ${elastic_count}
+        - Sigma Linux rules: ${sigma_count}
+        - **Total rule files: ${total_count}**
+        
+        ## Rule Categories (from SigmaHQ)
+        The Sigma Linux rules are organized by log source type:
+        - **auditd**: Linux audit daemon rules[2]
+        - **builtin**: Built-in Linux system log rules
+        - **file_event**: File system monitoring rules
+        - **network_connection**: Network activity detection rules
+        - **process_creation**: Process execution monitoring rules
+        
+        Last updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+        EOF
+        
+        echo "Created summary with ${total_count} total Linux rules"
+    
+    - name: Cleanup temporary directories
+      run: |
+        rm -rf temp-elastic temp-sigma
+    
+    - name: Configure git
+      run: |
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+    
+    - name: Check for changes and commit
+      run: |
+        git add linux/
+        
+        if git diff --staged --quiet; then
+          echo "No changes detected - skipping commit"
+        else
+          echo "Changes detected - committing updates"
+          git commit -m "Update Linux security rules collection - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          git push
+        fi
