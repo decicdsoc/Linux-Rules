@@ -24,4 +24,4 @@ The Sigma Linux rules are organized by log source type:
 - **network_connection**: Network activity detection rules
 - **process_creation**: Process execution monitoring rules
 
-Last updated: 2025-08-07 16:37:49 UTC
+Last updated: 2025-08-08 02:27:36 UTC
