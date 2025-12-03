@@ -12,9 +12,9 @@ This folder contains security detection rules for Linux systems collected from m
   - **sigma-process_creation-\*.yml**: Process creation rules
 
 ## Statistics
-- Elastic Linux rules: 319
+- Elastic Linux rules: 321
 - Sigma Linux rules: 205
-- **Total rule files: 524**
+- **Total rule files: 526**
 
 ## Rule Categories (from SigmaHQ)
 The Sigma Linux rules are organized by log source type:
@@ -24,4 +24,4 @@ The Sigma Linux rules are organized by log source type:
 - **network_connection**: Network activity detection rules
 - **process_creation**: Process execution monitoring rules
 
-Last updated: 2025-12-03 08:38:34 UTC
+Last updated: 2025-12-03 16:38:34 UTC
